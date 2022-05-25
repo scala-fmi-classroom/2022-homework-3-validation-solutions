@@ -19,24 +19,33 @@ enum Chain[+A]:
 
   def isEmpty: Boolean = false
 
-  def +:[B >: A](front: B): Chain[B] = ???
+  def +:[B >: A](front: B): Chain[B] = Singleton(front) ++ this
 
-  def :+[B >: A](back: B): Chain[B] = ???
+  def :+[B >: A](back: B): Chain[B] = this ++ Singleton(back)
 
-  def ++[B >: A](right: Chain[B]): Chain[B] = ???
+  def ++[B >: A](right: Chain[B]): Chain[B] = Append(this, right)
 
-  def foldLeft[B](initial: B)(f: (B, A) => B): B = ???
+  @tailrec
+  final def foldLeft[B](initial: B)(f: (B, A) => B): B = this match
+    case Singleton(a) => f(initial, a)
+    case Append(Singleton(a), right) => right.foldLeft(f(initial, a))(f)
+    case Append(Append(lleft, lright), right) =>
+      Append(lleft, Append(lright, right)).foldLeft(initial)(f)
 
-  def map[B](f: A => B): Chain[B] = ???
+  def map[B](f: A => B): Chain[B] = flatMap(a => Singleton(f(a)))
 
-  def flatMap[B](f: A => Chain[B]): Chain[B] = ???
+  def flatMap[B](f: A => Chain[B]): Chain[B] =
+    toList.map(f).reduce(_ ++ _)
 
-  def listify: Chain[A] = ???
+  def listify: Chain[A] = this match
+    case Singleton(_) => this
+    case Append(s @ Singleton(_), right) => Append(s, right.listify)
+    case Append(Append(lleft, lright), right) => Append(lleft, Append(lright, right)).listify
 
   def foreach(f: A => Unit): Unit = foldLeft(())((_, next) => f(next))
 
   override def equals(that: Any): Boolean = that match
-    case c: Chain[?] => ???
+    case c: Chain[?] => this.toList == c.toList
     case _ => false
 
   override def hashCode: Int = foldLeft(0)(_ * 31 + _.hashCode)
@@ -47,7 +56,11 @@ enum Chain[+A]:
   def toSet[B >: A]: Set[B] = foldLeft(Set.empty[B])((acc, next) => acc + next)
 
 object Chain:
-  def apply[A](head: A, rest: A*): Chain[A] = ???
+  def apply[A](head: A, rest: A*): Chain[A] =
+    rest.foldLeft(Singleton(head))((acc, next) => acc ++ Singleton(next))
+  //    rest match
+  //      case Seq() => Singleton(head)
+  //      case x +: xs => Append(Singleton(head), Chain(x, xs*))
 
   // Allows Chain to be used in pattern matching
   //
